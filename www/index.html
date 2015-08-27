@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <title>MusicGap</title>
+        <meta charset="utf-8" />
+        <meta name="format-detection" content="telephone=no" />
+        <meta name="msapplication-tap-highlight" content="no" />
+        <!-- WARNING: for iOS 7, remove the width=device-width and height=device-height attributes. See https://issues.apache.org/jira/browse/CB-4323 -->
+        <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi" />
+        <script src="js/jquery.min.js"></script>
+        <link rel="stylesheet" type="text/css" href="css/index.css" />
+       
+    <script type="text/javascript" src="cordova.js"></script>
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/index.css">
+     <script>
+    $(document).ready(function(){
+        $("#controlmain").hide();
+        $("#tituloopciones").click(function() {
+            var accionador = document.getElementById("tituloopciones");
+            if(accionador.innerHTML=="Ocultar opciones"){
+                $("#controlmain").hide();
+                document.getElementById("tituloopciones").innerHTML="Mostrar opciones";
+            }else{
+                $("#controlmain").show();
+                document.getElementById("tituloopciones").innerHTML="Ocultar opciones";
+                document.getElementById("tituloopciones").scrollIntoView();
+                //$('html, body').animate({
+                //    scrollTop: $("#tituloopciones").offset().scrollTop
+               // }, 2000);
+            }
+        });
+    });
+    </script>
+    <script type="text/javascript">
+        document.addEventListener("deviceready", function() { 
+          onBodyLoad();
+        }, false);
+        var deviceready = false;
+        String.prototype.endsWith = function(suffix) {
+            return this.indexOf(suffix, this.length - suffix.length) !== -1;
+        };
+        window.actual=0;
+        window.repstatus="Reproducir";
+        window.modo=1;
+        var dirVacio=true;
+        var myMedia=null;
+        var fileSystemMain = null;
+        var parado=false;
+        var cronometro;
+        var directoryReader2;
+        window.diractual="/";
+        function actualizar() {
+            if(fileSystemMain!=null)
+            fileSystemMain.root.getDirectory(""+window.newPath, {create: true, exclusive: false}, onGetDirectoryWin, onGetDirectoryFail);
+        }
+        function success(entries) {
+            var i;
+           if(window.modo==1){
+                $("#reproductor1").show();
+                $("#reproductor2").hide();
+           }else{
+                $("#reproductor1").hide();
+                $("#reproductor2").show();
+           }
+
+           //debuglog("genial! tenemos "+entries.length+"cosas en el vector "+entries.toString());
+            if(entries.length!=0){
+                var limite = entries.length-1;
+                for (i=limite; i>=0; i--) {
+                    //debuglog("estoy en "+i+" con limite de "+limite);
+                    if(entries[i].isDirectory){
+                        //debuglog("es directorio");
+                        entries.splice(i,1);                        
+                    }
+                    else if(!entries[i].name.endsWith("mp3")&&!entries[i].name.endsWith("aac")&&!entries[i].name.endsWith("m4a")&&!entries[i].name.endsWith("3gp")){
+                        //debuglog("no es directorio pero tampoco compatible");
+                        entries.splice(i,1);  
+                    }
+                }
+               // debuglog("fin for");
+            }
+            window.entries=entries;
+            //debuglog("genial! tenemos "+entries.length+"cosas");
+            document.getElementById("titulocanciones").innerHTML="Canciones en "+window.newPath;
+            if(entries.length!=0){
+                dirVacio=false;
+                document.getElementById("playBtn").className="botonaso botonplay";
+                
+                if(entries.length!=1){
+                    document.getElementById("nextBtn").className="botonaso botonsig";
+                    document.getElementById("prevBtn").className="botonaso botonant";
+                    logclean();
+                    for (i=0; i<entries.length; i++) {
+                        if(i==window.actual)
+                            log("<a href=\"#\" id=\"cancion"+i+"\" onClick=\"mandala("+i+")\"class=\"list-group-item-info\">"+entries[i].name+"</a>");
+                        else
+                            log("<a href=\"#\" id=\"cancion"+i+"\" onClick=\"mandala("+i+")\"class=\"list-group-item\">"+entries[i].name+"</a>");
+                    }
+                }
+            }
+        }
+        function mandala(index) {
+            document.getElementById("cancion"+window.actual).className="list-group-item";
+            document.getElementById("cancion"+index).className="list-group-item-info";
+            window.actual=index;
+            stopm();
+            play();
+        }
+
+        function onlyplay(){
+             if(!dirVacio){
+                if(window.repstatus=="Reproducir")
+                    play()
+            }
+        }
+        function onlyparar(){
+             if(!dirVacio){
+                if(window.repstatus=="Pausar")
+                    play()
+            }
+        }
+        function play() {
+            if(!dirVacio){
+                deleteinterval();
+                var boton = document.getElementById("valrep");
+                //log("Window actual"+window.actual);
+                if(window.repstatus=="Reproducir"){                   
+                    //debuglog("play con "+entries.length+" entries y actual"+window.actual);
+                    logclean();
+                    for (i=0; i<entries.length; i++) {
+                        if(i==window.actual)
+                            log("<a href=\"#\" id=\"cancion"+i+"\" onClick=\"mandala("+i+")\"class=\"list-group-item-info\">"+entries[i].name+"</a>");
+                        else
+                            log("<a href=\"#\" id=\"cancion"+i+"\" onClick=\"mandala("+i+")\"class=\"list-group-item\">"+entries[i].name+"</a>");
+                    }
+                    window.repstatus="Pausar";
+                    boton.innerHTML="<img src=\"img/stop.png\" height=\"40%\" style=\"padding-right: 5%;\">Parar";
+                    if(myMedia){
+                        myMedia.play();
+                    }
+                    else{
+                        if(window.entries[window.actual].isDirectory)
+                            next();
+                        else{
+                            myMedia = new Media(window.entries[window.actual].fullPath, great, faila, changeStatus);
+                            myMedia.play();
+                        }
+                    }
+                    cronometro = setInterval(
+                        function(){
+                            //debuglog("parado false playy");
+                            parado=false;
+                            deleteinterval();
+                        }
+                        ,3000);
+                }else{
+                    window.repstatus="Reproducir";
+                    boton.innerHTML="<img src=\"img/play.png\" height=\"40%\" style=\"padding-right: 5%;\">Reproducir";
+                    if(myMedia)
+                        myMedia.pause();
+                }
+            }else debuglog("play dirnull");
+        }
+        function changeStatus(newstatus) {
+           // debuglog("estado "+newstatus);
+            if(newstatus==4 && !parado){
+               // debuglog("estado coincide reproducir siguiente "+newstatus);
+                next();
+            }                
+        }  
+        function prev() {
+            deleteinterval();
+             //debuglog("parado true prevv");
+            parado=true;
+            if(window.actual==0)
+                window.actual=window.entries.length-1;
+            else
+                window.actual=window.actual-1;            
+            stopm();
+            play();
+        }
+        function deleteinterval(){
+            if(cronometro!=null){
+                clearInterval(cronometro);
+                cronometro=null;
+               // debuglog("clearIntervall");
+            }                
+        }
+        function next() {
+            deleteinterval();
+           //debuglog("parado true next");
+            parado=true;
+            if(window.actual==(window.entries.length-1))
+                window.actual=0;
+            else
+                window.actual=window.actual+1;
+            //debuglog("parado true next2");
+            stopm();
+           //debuglog("fin stop en next");
+            play();
+            //debuglog("end next");
+        }
+        function stopm() {
+            if(myMedia){
+                deleteinterval();
+               //debuglog("parado true stop ");
+                parado=true;
+                var boton = document.getElementById("valueplay");
+                boton.innerHTML="Reproducir";
+                window.repstatus="Reproducir";
+                myMedia.stop();
+                myMedia.release();
+                myMedia=null;
+            }
+           //else
+               // debuglog("mi media null en stop");
+        }//
+
+        function noConfig(){
+            location.href="config.html";
+        }
+        function goToSearch(){
+            $("#myModal").modal('hide')
+            $("#myModalsearch").modal('show')
+            listdirs("");
+        }
+        function listdirs(direccion){
+             document.getElementById("titulocarpetas").innerHTML="Directorio : "+direccion;
+            fileSystemMain.root.getDirectory(direccion, {create: true, exclusive: false}, onGetDirectoryWinDirs, onGetDirectoryFail);
+        }
+        var onGetDirectoryWinDirs = function(parent) {
+            debuglog("se obtuvo el lector");
+            directoryReader2 = parent.createReader();
+            directoryReader2.readEntries(successDirs,fail);
+        }
+        
+        function makeConfig(){
+            if(""!=document.getElementById("pathinput").value){
+
+                window.newPath = document.getElementById("pathinput").value;
+
+                $("#myModal").modal('hide')
+                //debuglog("makeConfig con "+window.newPath);
+                write(window.fileEntryMain);
+            }
+        }
+        function siConfig(directorio){
+            fileSystemMain.root.getDirectory(""+directorio, {create: true, exclusive: false}, onGetDirectoryWin, onGetDirectoryFail);
+            window.newPath=directorio;
+        } 
+        function cambiarmodo(){
+            writemode(window.fileEntryMain);
+        }
+        function fail(error) {
+            debuglog("error "+error.code);
+        }  function great(error) {
+            debuglog("error "+error.code);
+        }     
+        function faila(error) {
+            //debuglog("errorr "+error.code);
+        }    
+        var onGetDirectoryWin = function(parent) {
+            directoryReader2 = parent.createReader();
+            directoryReader2.readEntries(success,fail);
+        }
+        var onGetDirectoryFail = function() {
+            debuglog("Error obteniendo directorio")
+        }
+        function gotFileEntry(fileEntry) {
+            // debuglog("got file");
+            window.fileEntryMain=fileEntry;
+            fileEntry.file(gotFiletoRead, fail);
+            
+        }function write(fileEntry) {
+            //debuglog("got file to write");
+            fileEntry.createWriter(gotFileWriter, fail);
+            
+        }
+        function writemode(fileEntry) {
+            //debuglog("got file to write");
+            fileEntry.createWriter(gotFileWritermode, fail);
+            
+        }
+        function gotFiletoRead(file) {
+            var reader = new FileReader();
+            reader.onloadend = function(evt) {
+                //debuglog("se leyo "+evt.target.result);
+                if(evt.target.result=="")
+                    noConfig();
+                else{
+                    var data = JSON.parse(evt.target.result);
+                    window.modo=data.modo;
+                    siConfig(data.direccion);
+                }
+                    
+            };
+            reader.readAsText(file);
+        }
+        function gotFileWriter(writer) {
+            writer.write('{"direccion":"'+window.newPath+'", "modo":"1"}');
+            //debuglog("escrito "+window.newPath);
+            siConfig(window.newPath);            
+        }
+        function gotFileWritermode(writer) {
+            if(window.modo==1)
+                window.modo=2;
+            else
+                window.modo=1;
+
+            if(window.modo==1){
+                $("#reproductor1").show();
+                $("#reproductor2").hide();
+           }else{
+                $("#reproductor1").hide();
+                $("#reproductor2").show();
+           }
+            document.getElementById("start").scrollIntoView();
+            $("#controlmain").hide();
+            document.getElementById("tituloopciones").innerHTML="Mostrar opciones";
+            writer.write('{"direccion":"'+window.newPath+'", "modo":"'+window.modo+'"}');
+            //debuglog("escrito "+window.newPath);
+            siConfig(window.newPath);            
+        }
+        function gotFS(fileSystem) {
+           // debuglog("got fss");
+            fileSystemMain=fileSystem;
+            fileSystem.root.getFile("musicgapconfig.txt", {create: true, exclusive: false}, gotFileEntry, fail);
+
+            //fileSystem.root.getDirectory("musicgap", {create: true, exclusive: false}, onGetDirectoryWin, onGetDirectoryFail);
+        }
+        function search(ele) {
+            if(event.keyCode == 13) {
+                makeConfig();    
+            }
+        }
+        function onBodyLoad(){       
+            //log("Great1!!! ");   // Get a directory reader
+            window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, gotFS, fail);
+        }
+        function logclean(){
+            document.getElementById("logueo").innerHTML="";
+        }
+        
+        function debuglog(message){
+            document.getElementById("debuglog").innerHTML=document.getElementById("debuglog").innerHTML+"<br><center>"+message+"<center>";
+        }
+        function log(message){
+            document.getElementById("logueo").innerHTML=document.getElementById("logueo").innerHTML+"<br><center>"+message+"<center>";
+        }
+        
+
+    </script>
+  </head>
+    <body>
+        <div id="start"></div>
+        <div id="reproductor1" class="fullheight">
+            <a onClick="prev()">
+                <div id="prevBtn" class="botonaso botonant">
+                    <div class="alineador"></div>
+                    <center><img src="img/atras.png" height="40%" style="padding-right: 5%;">Anterior</center>
+                </div>
+            </a>
+            <div style="height: 8%;"></div>
+
+            <a onClick="play()">
+                <div id="playBtn" class="botonaso botonplay">
+                    <div class="alineador"></div>
+                    <center id="valrep"><img src="img/play.png" height="40%" style="padding-right: 5%;">Reproducir</center>
+                    
+                </div>
+            </a>
+            <div style="height: 8%;"></div>
+            <a onClick="next()">
+                <div id="nextBtn" class="botonaso botonsig">
+                    <div class="alineador"></div>
+                    <center><img src="img/adelante.png" height="40%" style="padding-right: 5%;">Siguiente</center>
+                </div>
+            </a>
+        </div>
+        <div id="reproductor2" class="fullheight">
+            <a onClick="onlyplay()">
+                <div id="playBtn2" class="botonasoa botonant">
+                    <div class="alineador"></div>
+                    <center><div id="valueplaya"><img src="img/play.png" height="40%" style="padding-right: 5%;"></img>Reproducir</div></center>
+                    
+                </div>
+            </a>
+            <div style="height: 10%;"></div>
+             <a onClick="onlyparar()">
+                <div id="playBtn" class="botonasoa botonplay">
+                    <div class="alineador"></div>
+                    <center><div id="valueplay"><img src="img/stop.png" height="40%" style="padding-right: 5%;"></img> Parar</div></center>
+                    
+                </div>
+            </a>
+        </div>
+        <div style="height: 10%;"></div>
+       <!--
+       <input style="height: 33%; background-color: #C02942;" type="button" class="botonaso" name="prevBtn" id="prevBtn" onClick="prev()"value="Anterior" disabled>
+      <br />
+ <input style="height: 33%; background-color: #ECD078;" type="button" class="botonaso botonplay" name="playBtn" id="playBtn" onClick="play()" value="Reproducir" disabled>
+      <br />
+      <input style="height: 33%; background-color: #542437;" type="button" class="botonaso" name="nextBtnBtn" id="prevBtn" onClick="next()"value="Siguiente" disabled>
+
+       <audio id="audio" controls autoplay hidden="hidden">
+          <source id="mp3Source" type="audio/mpeg"/>
+         <source id="mp3Source" src="file:///storage/sdcard0/recording.wav" type="audio/mpeg"/>
+          <source id="oggSource" type="audio/ogg"></source>
+          <source id="wavSource" type="audio/wav"></source>
+        Your browser does not support the audio element.
+    </audio> -->
+    <div class="panel botonplay" id="mostraropciones">
+        <div class="panel-heading">
+            <center><div id="tituloopciones" class="botonaso botonplay">Mostrar opciones</div></center>
+        </div>
+    </div>
+    <div id="controlmain">
+        
+        <div class="panel panel-success">
+            <div class="panel-heading">
+                <center><h1 class="panel-title" style="font-size: 150%;font-style: oblique;"><div id="titulocanciones">Lista de canciones</div></h1></center>
+            </div>
+            <div class="panel-body\">
+                <div class="list-group" id="logueo">
+                </div>
+            </div>
+        </div>
+        <div id="debuglog">
+        </div>
+        <a onClick="onBodyLoad()">
+            <div class="botonaso botonant">
+                <div style="height: 40%;"></div>
+                <center>Actualizar</center>
+            </div>
+        </a>
+        <a onClick="noConfig()">
+            <div  class="botonaso botonsig">
+                <div style="height: 40%;"></div>
+                <center>Configurar</center>
+            </div>
+        </a>
+        <a onClick="cambiarmodo()">
+            <div  class="botonaso botonant">
+                <div style="height: 40%;"></div>
+                <center>Cambiar modo</center>
+            </div>
+        </a>
+        <div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                        <h4 class="modal-title" id="myModalLabel">Configuracion</h4>
+                    </div>
+                    <form method="POST" action="#" onSubmit="makeConfig()" >         
+                        <div class="modal-body">
+                            <div class="form-group">
+                                <div class="alert alert-warning">
+                                    <label for="recipient-name" class="control-label">No se encontro un directorio configurado, ingresa uno</label>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <table>
+                                    <tr>
+                                        <td>
+                                            <input type="text" class="form-control" id="pathinput" onkeydown="search(this)" placeholder="Direccion de tu carpeta desde /">
+                                        </td>
+                                        <td width="15%">
+                                            <img src="img/searchto.png" width="105%"onClick="goToSearch()"/>
+                                        </td>
+                                    </tr>
+                                </table>
+                                
+                            </div>
+                            <div class="form-group" id="divmensaje">                
+                            </div>                
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-default" data-dismiss="modal">Cerrar</button>
+                            <button type="button" name="crear" onClick="makeConfig()" class="btn btn-success">Configurar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="myModalsearch" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                    <h4 class="modal-title" id="myModalLabel">Buscar carpeta</h4>
+                </div>
+                <div class="modal-body">
+                    <div class="panel panel-success">
+                        <div class="panel-heading">
+                            <center><h1 class="panel-title" style="font-size: 150%;font-style: oblique;"><div id="titulocarpetas">Directorio: /</div></h1></center>
+                        </div>
+                        <br />
+                        <div class="botonplay" onClick="volvercarpetas()">
+                           <br />
+                            <center>
+                                <h1 class="panel-title botonplay" style="font-size: 150%;font-style: oblique;">
+                                    Ir atrás
+                                </h1>
+                            </center>
+                            <br />
+                        </div>
+                        <div class="panel-body\">
+
+                            <table class="list-group" id="bodypanelcarpetas">
+                                <a href="#" id="cancion"onClick="mandala()"><span class="list-group-item blank" ><img src="img/folder.png" class="col-mg-2" width="15%" /> carpeta1</span></a>
+                                  <a href="#" id="cancion" onClick="mandala()"><span class="list-group-item blank"><img src="img/folder.png" class="col-mg-2" width="15%" /> carpeta2</span></a>
+                            </table>
+                        </div>
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/bootstrap.min.js"></script>
+  </body>
+</html>
+
+    

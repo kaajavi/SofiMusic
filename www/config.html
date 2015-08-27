@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <title></title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no;" />
+    <meta charset="utf-8">
+    <script src="js/jquery.min.js"></script>
+    <script type="text/javascript" src="cordova.js"></script> 
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/index.css">
+    <script type="text/javascript">
+    document.addEventListener("deviceready", function() { 
+          onBodyLoad();
+        }, false);
+        var deviceready = false;
+        String.prototype.endsWith = function(suffix) {
+            return this.indexOf(suffix, this.length - suffix.length) !== -1;
+        };
+        window.actual=0;
+        var dirVacio=true;
+        var myMedia=null;
+        var fileSystemMain = null;
+        var parado=false;
+        var cronometro;
+        var directoryReader2;
+        window.diractual="";
+        window.direcciones=[""];
+        function actualizar() {
+            if(fileSystemMain!=null)
+            fileSystemMain.root.getDirectory(window.diractual, {create: true, exclusive: false}, onGetDirectoryWin, onGetDirectoryFail);
+        }
+        function noConfig(){
+            $("#myModal").modal('show')
+            document.getElementById("titulocarpetas").innerHTML="Directorio : /";
+            fileSystemMain.root.getDirectory("", {create: true, exclusive: false}, onGetDirectoryWinDirs, onGetDirectoryFail);
+            //debuglog("noConfig");
+        }
+        function goToSearch(){
+            $("#myModal").modal('hide')
+            $("#myModalsearch").modal('show')
+            
+        }
+        function volvercarpetas(){
+            //debuglog("ir atras activado y las direcciones actuales son "+window.direcciones.length);
+            if(window.direcciones.length!=1){
+                window.direcciones.pop();
+                var dire = window.direcciones[window.direcciones.length-1];
+                window.direcciones.pop();
+                listdirs(dire);    
+            }
+            
+           
+        }
+        function listdirs(direccion){
+            logdirsclean();
+            // debuglog("son direcciones "+window.direcciones.length +" en "+window.direcciones.toString());
+            window.direcciones.push(direccion+"");
+            //debuglog("son direcciones "+window.direcciones.length +" en "+window.direcciones.toString());
+            var path="";
+            var i =0;
+            var blank=false;
+            for (i=0; i<window.direcciones.length; i++) {
+                //debuglog("path entrando por "+window.direcciones[i]+" i tiene que ser menor que "+(window.direcciones.length-1) + " y ahora es "+i);
+                if(window.direcciones[i]!=""){
+                    if(path!="")
+                        path=path +"/"+window.direcciones[i];
+                    else
+                        path=window.direcciones[i];
+                }
+                    
+                
+            }
+            if (path=="/" || path=="")
+                path=direccion;
+            //debuglog("recibido direccion "+direccion + " y path "+path);
+            window.diractual=path;
+            document.getElementById("titulocarpetas").innerHTML="Directorio : "+path;
+            if(path=="/")
+                path="";
+            fileSystemMain.root.getDirectory(path, {create: true, exclusive: false}, onGetDirectoryWinDirs, onGetDirectoryFail);
+        }
+        var onGetDirectoryWinDirs = function(parent) {
+           // debuglog("se obtuvo el lector");
+            directoryReader2 = parent.createReader();
+            directoryReader2.readEntries(successDirs,fail);
+        }
+        function successDirs(entries) {
+            var i;     
+            //debuglog("leyendo con length "+entries.length);
+            if(entries.length!=0){
+                var limite = entries.length-1;
+               // debuglog("GreatSuccess if!!!!");
+                for (i=limite; i>=0; i--) {
+                    
+                    if(!entries[i].name.endsWith("mp3")&&!entries[i].name.endsWith("aac")&&!entries[i].name.endsWith("m4a")&&!entries[i].name.endsWith("3gp")&&!entries[i].isDirectory){
+                            //debuglog("borrando archivo "+entries[i].name);
+                            entries.splice(i,1);                        
+                    
+                    }
+                    //debuglog("for en "+ i);
+                }
+                //debuglog("Fin For");
+            }
+           //debuglog("leestoooo, creando carpetas");
+           entries.sort();
+            if(entries.length!=0){
+                dirVacio=false;
+                if(entries.length!=1){
+                    logdirsclean();
+                    for (i=0; i<entries.length; i++) {
+                        if(entries[i].isDirectory)
+                            logDirs(entries[i].name);      
+                        else
+                            logDirsSong(entries[i].name);                  
+                    }
+                }
+            }
+        }
+        function seleccionar(){
+            document.getElementById("pathinput").value=window.diractual;
+            $("#myModal").modal('show')
+        }
+        function makeConfig(){
+            if(""!=document.getElementById("pathinput").value){
+
+                window.newPath = document.getElementById("pathinput").value;
+
+                $("#myModal").modal('hide')
+                //debuglog("makeConfig con "+window.newPath);
+                write(window.fileEntryMain);
+                //location.href="index.html";
+            }
+        }
+        function siConfig(directorio){
+            $("#myModal").modal('show')
+            document.getElementById("titulocarpetas").innerHTML="Directorio : "+directorio;
+            document.getElementById("pathinput").value= directorio;
+            fileSystemMain.root.getDirectory(directorio, {create: true, exclusive: false}, onGetDirectoryWinDirs, onGetDirectoryFail);
+            window.diractual=directorio;
+            directorio = "/"+directorio;
+            window.direcciones = directorio.split("/");
+        }
+        function fail(error) {
+            debuglog("error "+error.code);
+        }  function great(error) {
+            debuglog("error "+error.code);
+        }     
+        function faila(error) {
+            //debuglog("errorr "+error.code);
+        }    
+        var onGetDirectoryWin = function(parent) {
+            directoryReader2 = parent.createReader();
+            directoryReader2.readEntries(success,fail);
+        }
+        var onGetDirectoryFail = function() {
+            debuglog("Error obteniendo directorio")
+        }
+        function gotFileEntry(fileEntry) {
+            // debuglog("got file");
+            window.fileEntryMain=fileEntry;
+            fileEntry.file(gotFiletoRead, fail);
+            
+        }function write(fileEntry) {
+            //debuglog("got file to write");
+            fileEntry.createWriter(gotFileWriter, fail);
+            
+        }
+        function gotFiletoRead(file) {
+            var reader = new FileReader();
+            reader.onloadend = function(evt) {
+                if(evt.target.result=="")
+                    noConfig();
+                else{
+                    var data = JSON.parse(evt.target.result);
+                    siConfig(data.direccion);
+                }
+                    
+            };
+            reader.readAsText(file);
+        }
+        function gotFileWriter(writer) {
+            writer.write('{"direccion":"'+window.newPath+'", "modo":"1"}');
+            //debuglog("escrito "+window.newPath);
+            //siConfig(window.newPath);
+             $("#myModalready").modal('show')            
+        }
+        function gotFS(fileSystem) {
+           // debuglog("got fs");
+            fileSystemMain=fileSystem;
+            fileSystem.root.getFile("musicgapconfig.txt", {create: true, exclusive: false}, gotFileEntry, fail);
+
+            //fileSystem.root.getDirectory("musicgap", {create: true, exclusive: false}, onGetDirectoryWin, onGetDirectoryFail);
+        }
+        function search(ele) {
+            if(event.keyCode == 13) {
+                makeConfig();    
+            }
+        }
+        function onBodyLoad(){       
+            //log("Great1!!!! ");   // Get a directory reader
+            window.requestFileSystem(LocalFileSystem.PERSISTENT, 0, gotFS, fail);
+        }
+        function logclean(){
+            document.getElementById("logueo").innerHTML="";
+        }
+        function logdirsclean(){
+            document.getElementById("bodypanelcarpetas").innerHTML="";
+        }
+        function debuglog(message){
+            document.getElementById("debuglog").innerHTML=document.getElementById("debuglog").innerHTML+"<br><center>"+message+"<center>";
+        }
+        function log(message){
+            document.getElementById("logueo").innerHTML=document.getElementById("logueo").innerHTML+"<br><center>"+message+"<center>";
+        }
+         function goBackIndex(){
+            location.href="index.html";
+         }
+        function logDirs(nombre){
+            document.getElementById("bodypanelcarpetas").innerHTML=document.getElementById("bodypanelcarpetas").innerHTML+"<a href=\"#\" onClick=\"listdirs('"+nombre+"')\"><span class=\"list-group-item blank\" ><img src=\"img/folder.png\" class=\"col-mg-2\" width=\"15%\" /> "+nombre+"</span></a>";
+        }
+        function logDirsSong(nombre){
+            document.getElementById("bodypanelcarpetas").innerHTML=document.getElementById("bodypanelcarpetas").innerHTML+"<a href=\"#\" onClick=\"seleccionar()\"><span class=\"list-group-item blank\" ><img src=\"img/song.png\" class=\"col-mg-2\" width=\"15%\" /> "+nombre+"</span></a>";
+        }
+
+
+    </script>
+  </head>
+    <body class="fullheight">
+
+          
+            <div class="botonplay" onClick="volvercarpetas()">
+               <br />
+                <center>
+                    <h1 class="panel-title botonplay" style="font-size: 150%;font-style: oblique;">
+                       Buscar carpeta
+                    </h1>
+                </center>
+                <br />
+            </div>
+
+
+            <div class="panel panel-success">
+                <div class="panel-heading">
+                    <center><h1 class="panel-title" style="font-size: 150%;font-style: oblique;"><div id="titulocarpetas">Directorio: /</div></h1></center>
+                </div>
+                <br />
+                <div class="botonplay" onClick="volvercarpetas()">
+                   <br />
+                    <center>
+                        <h1 class="panel-title botonplay" style="font-size: 150%;font-style: oblique;">
+                            Ir a la carpeta anterior
+                        </h1>
+                    </center>
+                    <br />
+                </div>
+                <div class="botonsig" onClick="seleccionar()">
+                   <br />
+                    <center>
+                        <h1 class="panel-title botonsig" style="font-size: 150%;font-style: oblique;">
+                            Elegir esta carpeta
+                        </h1>
+                    </center>
+                    <br />
+                </div>
+                <div class="panel-body\">
+
+                    <div class="list-group" id="bodypanelcarpetas">
+                       
+                    </div>
+                </div>
+                
+            </div>
+
+
+    <div id="debuglog">
+    </div>
+    <div class="botonant" onClick="actualizar()">
+       <br />
+        <center>
+            <h1 class="panel-title botonant" style="font-size: 150%;font-style: oblique;">
+                Actualizar
+            </h1>
+        </center>
+        <br />
+    </div>
+   
+    <div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                   
+                    <h4 class="modal-title" id="myModalLabel">Configuracion</h4>
+                </div>
+                <form method="POST" action="#" onSubmit="makeConfig()" >         
+                    <div class="modal-body">
+                        <div class="form-group">
+                           
+                            <input type="text" class="form-control" id="pathinput" placeholder="Direccion de tu carpeta desde /">
+                                    
+                            
+                        </div>
+                        <div class="form-group" id="divmensaje">                
+                        </div>                
+                    </div>
+                    <div class="modal-footer">
+                        
+                        <button type="button" name="crear" onClick="goToSearch()" class="btn btn-info">Buscar carpeta</button>
+                        <button type="button" name="crear" onClick="makeConfig()" class="btn btn-success">Configurar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+     <div class="modal fade" id="myModalready" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                   
+                    <h4 class="modal-title" id="myModalLabel">Configuracion Completa!</h4>
+                </div><center>
+                    <button type="button" name="crear" onClick="goBackIndex()" class="btn btn-success">Listo!</button>
+                </center>
+            </div>
+        </div>
+    </div>
+    <script src="js/bootstrap.min.js"></script>
+  </body>
+</html>
+

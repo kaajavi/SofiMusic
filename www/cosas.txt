@@ -1,0 +1,5 @@
+dos botones reproducir verde 
+parar rojo
+sacar los otros botones al otro menu
+agregar iconos en los botones palabras mas chicas que los iconos
+separar los botones
